@@ -20,8 +20,8 @@ use super::MainAppMsg;
 type HeapResult<T> = Result<T, Box<MainAppMsg>>;
 
 #[inline]
-fn is_installed(game: &Game, game_path: impl AsRef<str>) -> HeapResult<bool> {
-    game.is_game_installed(game_path.as_ref())
+async fn is_installed(game: &Game, game_path: impl AsRef<str>) -> HeapResult<bool> {
+    game.is_game_installed(game_path.as_ref()).await
         .map_err(|err| Box::new(MainAppMsg::ShowToast {
             title: format!("Unable to verify {} installation", game.manifest.game_title),
             message: Some(err.to_string())
@@ -29,8 +29,8 @@ fn is_installed(game: &Game, game_path: impl AsRef<str>) -> HeapResult<bool> {
 }
 
 #[inline]
-fn get_diff(game: &Game, edition: impl AsRef<str>, game_path: impl AsRef<str>) -> HeapResult<DiffInfo> {
-    game.get_game_diff(game_path.as_ref(), edition.as_ref())
+async fn get_diff(game: &Game, edition: impl AsRef<str>, game_path: impl AsRef<str>) -> HeapResult<DiffInfo> {
+    game.get_game_diff(game_path.as_ref(), edition.as_ref()).await
         .map_err(|err| MainAppMsg::ShowToast {
             title: format!("Unable to find {} version diff", game.manifest.game_title),
             message: Some(err.to_string())
@@ -43,8 +43,8 @@ fn get_diff(game: &Game, edition: impl AsRef<str>, game_path: impl AsRef<str>) -
 }
 
 #[inline]
-fn get_download(game: &Game, edition: impl AsRef<str>) -> HeapResult<DiffInfo> {
-    game.get_game_download(edition.as_ref())
+async fn get_download(game: &Game, edition: impl AsRef<str>) -> HeapResult<DiffInfo> {
+    game.get_game_download(edition.as_ref()).await
         .map_err(|err| Box::new(MainAppMsg::ShowToast {
             title: format!("Unable to find {} download info", game.manifest.game_title),
             message: Some(err.to_string())
@@ -53,15 +53,19 @@ fn get_download(game: &Game, edition: impl AsRef<str>) -> HeapResult<DiffInfo> {
 }
 
 #[inline]
-fn get_diff_or_download(game: &Game, edition: impl AsRef<str> + Copy, game_path: impl AsRef<str>) -> HeapResult<DiffInfo> {
-    is_installed(game, game_path.as_ref())?
-        .then(|| get_diff(game, edition, game_path))
-        .unwrap_or_else(|| get_download(game, edition))
+async fn get_diff_or_download(game: &Game, edition: impl AsRef<str> + Copy, game_path: impl AsRef<str>) -> HeapResult<DiffInfo> {
+    if is_installed(game, game_path.as_ref()).await? {
+        get_diff(game, edition, game_path).await
+    }
+
+    else {
+        get_download(game, edition).await
+    }
 }
 
 #[inline]
-fn get_settings(game: &Game, config: &config::Config) -> HeapResult<GameSettings> {
-    config.games.get_game_settings(game)
+async fn get_settings(game: &Game, config: &config::Config) -> HeapResult<GameSettings> {
+    config.games.get_game_settings(game).await
         .map_err(|err| Box::new(MainAppMsg::ShowToast {
             title: format!("Unable to find {} settings", game.manifest.game_title),
             message: Some(err.to_string())
@@ -69,8 +73,8 @@ fn get_settings(game: &Game, config: &config::Config) -> HeapResult<GameSettings
 }
 
 #[inline]
-fn get_game_path<'a>(game: &'a Game, edition: impl AsRef<str>, config: &'a config::Config) -> HeapResult<PathBuf> {
-    get_settings(game, config)?
+async fn get_game_path<'a>(game: &'a Game, edition: impl AsRef<str>, config: &'a config::Config) -> HeapResult<PathBuf> {
+    get_settings(game, config).await?
         .paths.get(edition.as_ref())
         .ok_or_else(|| Box::new(MainAppMsg::ShowToast {
             title: format!("Unable to find {} installation path", game.manifest.game_title),
@@ -81,12 +85,12 @@ fn get_game_path<'a>(game: &'a Game, edition: impl AsRef<str>, config: &'a confi
 }
 
 #[inline]
-pub fn get_download_game_task(game_info: &CardInfo, config: &config::Config) -> HeapResult<Box<DownloadDiffQueuedTask>> {
+pub async fn get_download_game_task(game_info: &CardInfo, config: &config::Config) -> HeapResult<Box<DownloadDiffQueuedTask>> {
     let game = unsafe {
         games::get_unsafe(game_info.get_name())
     };
 
-    let game_path = get_game_path(game, game_info.get_edition(), config)?;
+    let game_path = get_game_path(game, game_info.get_edition(), config).await?;
 
     Ok(Box::new(DownloadDiffQueuedTask {
         card_info: game_info.clone(),
@@ -95,7 +99,7 @@ pub fn get_download_game_task(game_info: &CardInfo, config: &config::Config) -> 
             game,
             game_info.get_edition(),
             game_path.to_string_lossy()
-        )?,
+        ).await?,
         diff_origin: DiffOrigin::Game
     }))
 }

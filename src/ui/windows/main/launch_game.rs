@@ -59,7 +59,7 @@ pub fn addon_unavailable(addon_title: impl AsRef<str>, group_title: impl AsRef<s
 }
 
 #[inline]
-pub fn prepare_folders(game: &Game, info: &CardInfo, paths: &GameEditionPaths, enabled_addons: &[GameEditionAddon]) -> anyhow::Result<Option<(PathBuf, PathBuf)>> {
+pub async fn prepare_folders(game: &Game, info: &CardInfo, paths: &GameEditionPaths, enabled_addons: &[GameEditionAddon]) -> anyhow::Result<Option<(PathBuf, PathBuf)>> {
     // TODO: move files of disabled addons
 
     // Init game merge tree filesystem
@@ -68,14 +68,23 @@ pub fn prepare_folders(game: &Game, info: &CardInfo, paths: &GameEditionPaths, e
     let mut has_merged_layers = false;
 
     // Go through game addons list
-    for group in game.get_addons_list(info.get_edition())? {
+    for group in game.get_addons_list(info.get_edition()).await? {
         for addon in &group.addons {
-            let addon_path = addon.get_installation_path(&group.name, info.get_name(), info.get_edition())?;
+            let addon_path = addon.get_installation_path(
+                &group.name,
+                info.get_name(),
+                info.get_edition()
+            ).await?;
 
             // Is the addon is enabled in the settings
             if is_addon_enabled(enabled_addons, addon, &group) {
                 // Get its version diff
-                let diff = game.get_addon_diff(&group.name, &addon.name, addon_path.to_string_lossy(), info.get_edition())?;
+                let diff = game.get_addon_diff(
+                    &group.name,
+                    &addon.name,
+                    addon_path.to_string_lossy(),
+                    info.get_edition()
+                ).await?;
 
                 // If the addon is installed and its version is latest
                 if let Some(Diff { status: DiffStatus::Latest, .. }) = diff {
@@ -190,7 +199,7 @@ pub fn prepare_launch_args(config: &config::Config) -> String {
 }
 
 #[inline]
-pub fn launch_game(info: &CardInfo) -> anyhow::Result<()> {
+pub async fn launch_game(info: &CardInfo) -> anyhow::Result<()> {
     // Get game driver
     let game = unsafe {
         games::get_unsafe(info.get_name())
@@ -198,7 +207,7 @@ pub fn launch_game(info: &CardInfo) -> anyhow::Result<()> {
 
     // Get game settings
     let config = config::get();
-    let settings = config.games.get_game_settings(game)?;
+    let settings = config.games.get_game_settings(game).await?;
 
     // Get game paths
     let Some(paths) = settings.paths.get(info.get_edition()) else {
@@ -211,7 +220,7 @@ pub fn launch_game(info: &CardInfo) -> anyhow::Result<()> {
     };
 
     // Prepare game and addons folders
-    let Some((game_path, addons_path)) = prepare_folders(game, info, paths, enabled_addons)? else {
+    let Some((game_path, addons_path)) = prepare_folders(game, info, paths, enabled_addons).await? else {
         return Ok(())
     };
 
@@ -220,7 +229,7 @@ pub fn launch_game(info: &CardInfo) -> anyhow::Result<()> {
         game_path.to_string_lossy(),
         addons_path.to_string_lossy(),
         info.get_edition()
-    )?;
+    ).await?;
 
     // Get selected wine version
     let wine = Wine::from_config()?;

@@ -118,7 +118,7 @@ impl SimpleAsyncComponent for GameAddonsManagerApp {
                 };
 
                 let settings = config::get()
-                    .games.get_game_settings(game)
+                    .games.get_game_settings(game).await
                     .unwrap();
 
                 self.enabled_addons = settings.addons
@@ -138,10 +138,10 @@ impl SimpleAsyncComponent for GameAddonsManagerApp {
 
                 for group in addons {
                     for addon in &group.addons {
-                        let addon_path = addon.get_installation_path(&group.name, game_info.get_name(), game_info.get_edition()).unwrap();
+                        let addon_path = addon.get_installation_path(&group.name, game_info.get_name(), game_info.get_edition()).await.unwrap();
 
                         // FIXME: handle errors
-                        if let Ok(true) = game.is_addon_installed(&group.name, &addon.name, addon_path.to_string_lossy(), game_info.get_edition()) {
+                        if let Ok(true) = game.is_addon_installed(&group.name, &addon.name, addon_path.to_string_lossy(), game_info.get_edition()).await {
                             installed_addons.insert(GameEditionAddon {
                                 group: group.name.clone(),
                                 name: addon.name.clone()

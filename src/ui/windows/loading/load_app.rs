@@ -19,7 +19,9 @@ pub struct LoadingResult {
     pub games_list: init_games::GamesList
 }
 
-pub fn load_app(sender: &ComponentSender<LoadingApp>) -> Result<LoadingResult, LoadingAppMsg> {
+pub async fn load_app(sender: &AsyncComponentSender<LoadingApp>) -> Result<LoadingResult, LoadingAppMsg> {
+    let begin = std::time::Instant::now();
+
     sender.input(LoadingAppMsg::SetProgress(0.0));
     sender.input(LoadingAppMsg::SetActiveStage(String::from("Preparing default folders")));
 
@@ -55,7 +57,7 @@ pub fn load_app(sender: &ComponentSender<LoadingApp>) -> Result<LoadingResult, L
     sender.input(LoadingAppMsg::SetProgress(4.0 / TOTAL_STEPS));
     sender.input(LoadingAppMsg::SetActiveStage(String::from("Preparing games list")));
 
-    let games_list = init_games::get_games_list().map_err(|err| LoadingAppMsg::DisplayError {
+    let games_list = init_games::get_games_list().await.map_err(|err| LoadingAppMsg::DisplayError {
         title: String::from("Failed to prepare games list"),
         message: err.to_string()
     })?;
@@ -63,7 +65,7 @@ pub fn load_app(sender: &ComponentSender<LoadingApp>) -> Result<LoadingResult, L
     sender.input(LoadingAppMsg::SetProgress(5.0 / TOTAL_STEPS));
     sender.input(LoadingAppMsg::SetActiveStage(String::from("Registering games styles")));
 
-    init_games::register_games_styles().map_err(|err| LoadingAppMsg::DisplayError {
+    init_games::register_games_styles().await.map_err(|err| LoadingAppMsg::DisplayError {
         title: String::from("Failed to register games styles"),
         message: err.to_string()
     })?;
@@ -92,12 +94,14 @@ pub fn load_app(sender: &ComponentSender<LoadingApp>) -> Result<LoadingResult, L
     sender.input(LoadingAppMsg::SetProgress(9.0 / TOTAL_STEPS));
     sender.input(LoadingAppMsg::SetActiveStage(String::from("Checking games addons")));
 
-    let download_addons = check_addons::check_addons().map_err(|err| LoadingAppMsg::DisplayError {
+    let download_addons = check_addons::check_addons().await.map_err(|err| LoadingAppMsg::DisplayError {
         title: String::from("Failed to check games addons"),
         message: err.to_string()
     })?;
 
     sender.input(LoadingAppMsg::SetProgress(1.0));
+
+    println!("Launcher loading time: {} ms", begin.elapsed().as_millis());
 
     Ok(LoadingResult {
         download_wine,

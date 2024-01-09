@@ -166,6 +166,8 @@ impl SimpleAsyncComponent for GameDetailsComponent {
                         set_margin_top: 16,
                         set_spacing: 8,
 
+                        // TODO: hide this button if the game doesn't have any addons
+
                         gtk::Button {
                             add_css_class: "pill",
 

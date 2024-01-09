@@ -18,7 +18,7 @@ use crate::APP_ID;
 use super::main::MainApp;
 
 pub static mut WINDOW: Option<adw::ApplicationWindow> = None;
-pub static mut MAIN_WINDOW: Option<Controller<MainApp>> = None;
+pub static mut MAIN_WINDOW: Option<AsyncController<MainApp>> = None;
 
 #[derive(Debug)]
 pub struct LoadingApp {
@@ -38,8 +38,8 @@ pub enum LoadingAppMsg {
     }
 }
 
-#[relm4::component(pub)]
-impl SimpleComponent for LoadingApp {
+#[relm4::component(pub, async)]
+impl SimpleAsyncComponent for LoadingApp {
     type Init = ();
     type Input = LoadingAppMsg;
     type Output = ();
@@ -81,7 +81,7 @@ impl SimpleComponent for LoadingApp {
         }
     }
 
-    fn init(_init: Self::Init, root: &Self::Root, sender: ComponentSender<Self>) -> ComponentParts<Self> {
+    async fn init(_init: Self::Init, root: Self::Root, sender: AsyncComponentSender<Self>) -> AsyncComponentParts<Self> {
         let model = Self {
             progress_bar: gtk::ProgressBar::new(),
 
@@ -97,44 +97,50 @@ impl SimpleComponent for LoadingApp {
         }
 
         std::thread::spawn(move || {
-            match load_app::load_app(&sender) {
+            let runtime = tokio::runtime::Runtime::new().unwrap();
+
+            let result = runtime.block_on(async {
+                load_app::load_app(&sender).await
+            });
+
+            match result {
                 Ok(result) => {
                     // dbg!(&result);
-
+    
                     gtk::glib::MainContext::default().spawn(async {
                         let main_app = MainApp::builder()
                             .launch(result)
                             .detach();
-
+    
                         main_app.widget().connect_close_request(|_| {
                             relm4::main_application().quit();
-
+    
                             gtk::glib::Propagation::Proceed
                         });
-
+    
                         unsafe {
                             let window = WINDOW.as_ref()
                                 .unwrap_unchecked();
-
+    
                             window.set_hide_on_close(true);
                             window.close();
-
+    
                             main_app.widget()
                                 .present();
-
+    
                             MAIN_WINDOW = Some(main_app);
                         }
                     });
                 }
-
+    
                 Err(err) => sender.input(err)
             }
         });
 
-        ComponentParts { model, widgets }
+        AsyncComponentParts { model, widgets }
     }
 
-    fn update(&mut self, msg: Self::Input, _sender: ComponentSender<Self>) {
+    async fn update(&mut self, msg: Self::Input, _sender: AsyncComponentSender<Self>) {
         match msg {
             Self::Input::SetActiveStage(text) => self.active_stage = text,
             Self::Input::SetProgress(fraction) => self.progress_bar.set_fraction(fraction),

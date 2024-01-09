@@ -93,12 +93,12 @@ impl Addon {
     }
 
     /// Get proper addon installation path according to its type
-    pub fn get_installation_path(&self, group_name: impl AsRef<str>, game: impl AsRef<str>, edition: impl AsRef<str>) -> anyhow::Result<PathBuf> {
+    pub async fn get_installation_path(&self, group_name: impl AsRef<str>, game: impl AsRef<str>, edition: impl AsRef<str>) -> anyhow::Result<PathBuf> {
         let Some(game) = games::get(game.as_ref())? else {
             anyhow::bail!("Unable to find {} integration script", game.as_ref());
         };
 
-        let settings = config::get().games.get_game_settings(game)?;
+        let settings = config::get().games.get_game_settings(game).await?;
 
         let Some(paths) = settings.paths.get(edition.as_ref()) else {
             anyhow::bail!("Unable to find {} paths", game.manifest.game_title);

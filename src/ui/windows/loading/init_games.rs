@@ -26,40 +26,34 @@ pub fn init_games() -> anyhow::Result<()> {
 }
 
 #[inline]
-fn get_game_entries(game: &Game, settings: GameSettings) -> anyhow::Result<Vec<(bool, GameListEntry)>> {
-    game.get_game_editions_list()?
-        .into_iter()
-        .map(|edition| game.get_card_picture(&edition.name)
-        .map(|card_picture| GameListEntry {
+async fn get_game_entries(game: &Game, settings: GameSettings) -> anyhow::Result<Vec<(bool, GameListEntry)>> {
+    let mut results = Vec::new();
+
+    for edition in game.get_game_editions_list().await? {
+        let entry = GameListEntry {
             game_name: game.manifest.game_name.clone(),
             game_title: game.manifest.game_title.clone(),
             game_developer: game.manifest.game_developer.clone(),
-            card_picture,
+            card_picture: game.get_card_picture(&edition.name).await?,
             edition
-        })
-        .and_then(|entry| {
-            game.is_game_installed(settings.paths[&entry.edition.name].game.to_string_lossy())
-                .map(|installed| (installed, entry))
-        }))
-        .collect::<anyhow::Result<Vec<_>>>()
+        };
+
+        let installed = game.is_game_installed(settings.paths[&entry.edition.name].game.to_string_lossy()).await?;
+
+        results.push((installed, entry));
+    }
+
+    Ok(results)
 }
 
 #[inline]
-pub fn register_games_styles() -> anyhow::Result<()> {
-    let sus = games::list()?.iter()
-        .map(|(name, game)| game.get_game_editions_list()
-            .map(|editions| editions.into_iter()
-                .map(|edition| game.get_details_background_style(&edition.name)
-                .map(|style| (name, edition.name, style)))
-                .collect::<Result<Vec<_>, _>>()))
-        .collect::<Result<Result<Vec<_>, _>, _>>()??;
-
+pub async fn register_games_styles() -> anyhow::Result<()> {
     let mut styles = String::new();
 
-    for entries in sus {
-        for (game, edition, style) in entries {
-            if let Some(style) = style {
-                styles = format!("{styles} .game-details--{game}--{edition} {{ {style} }}");
+    for (name, game) in games::list()?.iter() {
+        for edition in game.get_game_editions_list().await? {
+            if let Some(style) = game.get_details_background_style(&edition.name).await? {
+                styles = format!("{styles} .game-details--{name}--{} {{ {style} }}", edition.name);
             }
         }
     }
@@ -72,7 +66,7 @@ pub fn register_games_styles() -> anyhow::Result<()> {
 }
 
 #[inline]
-pub fn get_games_list() -> anyhow::Result<GamesList> {
+pub async fn get_games_list() -> anyhow::Result<GamesList> {
     let settings = config::get().games;
 
     let games = games::list()?;
@@ -81,9 +75,9 @@ pub fn get_games_list() -> anyhow::Result<GamesList> {
     let mut available = Vec::with_capacity(games.len());
 
     for game in games.values() {
-        let settings = settings.get_game_settings(game)?;
+        let settings = settings.get_game_settings(game).await?;
 
-        let entries = get_game_entries(game, settings)?;
+        let entries = get_game_entries(game, settings).await?;
 
         let installed_entries = entries.iter()
             .filter_map(|(installed, entry)| installed.then_some(entry))

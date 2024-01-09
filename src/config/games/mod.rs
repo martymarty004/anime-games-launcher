@@ -82,9 +82,9 @@ impl From<&Json> for Games {
 }
 
 impl Games {
-    pub fn get_game_settings(&self, game: &Game) -> anyhow::Result<GameSettings> {
+    pub async fn get_game_settings(&self, game: &Game) -> anyhow::Result<GameSettings> {
         let editions = game
-            .get_game_editions_list()?
+            .get_game_editions_list().await?
             .into_iter()
             .map(|edition| edition.name);
 

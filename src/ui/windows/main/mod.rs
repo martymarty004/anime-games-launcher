@@ -150,8 +150,8 @@ pub enum MainAppMsg {
     }
 }
 
-#[relm4::component(pub)]
-impl SimpleComponent for MainApp {
+#[relm4::component(pub, async)]
+impl SimpleAsyncComponent for MainApp {
     type Init = LoadingResult;
     type Input = MainAppMsg;
     type Output = ();
@@ -342,7 +342,7 @@ impl SimpleComponent for MainApp {
         }
     }
 
-    fn init(init: Self::Init, root: &Self::Root, sender: ComponentSender<Self>) -> ComponentParts<Self> {
+    async fn init(init: Self::Init, root: Self::Root, sender: AsyncComponentSender<Self>) -> AsyncComponentParts<Self> {
         let mut model = Self {
             leaflet: adw::Leaflet::new(),
             flap: adw::Flap::new(),
@@ -528,10 +528,10 @@ impl SimpleComponent for MainApp {
             sender.input(MainAppMsg::ShowTasksFlap);
         }
 
-        ComponentParts { model, widgets }
+        AsyncComponentParts { model, widgets }
     }
 
-    fn update(&mut self, msg: Self::Input, sender: ComponentSender<Self>) {
+    async fn update(&mut self, msg: Self::Input, sender: AsyncComponentSender<Self>) {
         match msg {
             MainAppMsg::OpenDetails { info, installed } => {
                 self.game_details_info = info.clone();
@@ -548,14 +548,14 @@ impl SimpleComponent for MainApp {
                         games::get_unsafe(info.get_name())
                     };
 
-                    let settings = config::get().games.get_game_settings(game).unwrap();
+                    let settings = config::get().games.get_game_settings(game).await.unwrap();
 
                     let paths = settings
                         .paths
                         .get(info.get_edition())
                         .unwrap();
 
-                    match game.get_game_status(paths.game.to_string_lossy(), info.get_edition()) {
+                    match game.get_game_status(paths.game.to_string_lossy(), info.get_edition()).await {
                         Ok(status) => {
                             self.game_details.emit(GameDetailsComponentInput::SetStatus(status));
                         }
@@ -589,7 +589,7 @@ impl SimpleComponent for MainApp {
 
                 let game = games::get_unsafe(game_info.get_name());
 
-                match game.get_addons_list(game_info.get_edition()) {
+                match game.get_addons_list(game_info.get_edition()).await {
                     Ok(addons) => {
                         controller.emit(GameAddonsManagerAppMsg::SetGameInfo {
                             game_info,
@@ -633,7 +633,7 @@ impl SimpleComponent for MainApp {
             MainAppMsg::AddDownloadGameTask(game_info) => {
                 let config = config::get();
 
-                match download_game_task::get_download_game_task(&game_info, &config) {
+                match download_game_task::get_download_game_task(&game_info, &config).await {
                     Ok(task) => {
                         self.tasks_queue.emit(TasksQueueComponentInput::AddTask(task));
 
@@ -706,7 +706,7 @@ impl SimpleComponent for MainApp {
                 sender.input(MainAppMsg::HideDetails);
                 sender.input(MainAppMsg::ShowTasksFlap);
 
-                match download_addon_task::get_download_addon_task(&game_info, &addon, &group) {
+                match download_addon_task::get_download_addon_task(&game_info, &addon, &group).await {
                     Ok(task) => {
                         // TODO: should I move game to "queued"?
                         self.tasks_queue.emit(TasksQueueComponentInput::AddTask(task));
@@ -727,7 +727,7 @@ impl SimpleComponent for MainApp {
                 sender.input(MainAppMsg::HideDetails);
                 sender.input(MainAppMsg::ShowTasksFlap);
 
-                match uninstall_addon_task::get_uninstall_addon_task(&game_info, &addon, &group) {
+                match uninstall_addon_task::get_uninstall_addon_task(&game_info, &addon, &group).await {
                     Ok(task) => {
                         // TODO: should I move game to "queued"?
                         self.tasks_queue.emit(TasksQueueComponentInput::AddTask(task));
@@ -773,8 +773,8 @@ impl SimpleComponent for MainApp {
                         self.running_games_indexes.insert(info.clone(), self.running_games.guard().push_back(info.clone()));
                     }
 
-                    std::thread::spawn(move || {
-                        if let Err(err) = launch_game::launch_game(&info) {
+                    // std::thread::spawn(move || {
+                        if let Err(err) = launch_game::launch_game(&info).await {
                             sender.input(MainAppMsg::ShowToast {
                                 title: format!("Failed to launch {}", info.get_title()),
                                 message: Some(err.to_string())
@@ -782,7 +782,7 @@ impl SimpleComponent for MainApp {
                         }
 
                         sender.input(MainAppMsg::FinishRunningGame(info));
-                    });
+                    // });
                 }
             }
 

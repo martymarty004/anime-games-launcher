@@ -69,7 +69,7 @@ fn main() -> anyhow::Result<()> {
     let app = RelmApp::new(APP_ID);
 
     // Show first run window
-    app.run::<LoadingApp>(());
+    app.run_async::<LoadingApp>(());
 
     Ok(())
 }
