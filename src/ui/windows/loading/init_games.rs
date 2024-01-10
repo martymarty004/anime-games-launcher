@@ -38,7 +38,7 @@ fn get_game_entries(game: &Game, settings: GameSettings) -> anyhow::Result<Vec<(
             edition
         })
         .and_then(|entry| {
-            game.is_game_installed(settings.paths[&entry.edition.name].game.to_string_lossy())
+            game.is_game_installed(&settings.paths[&entry.edition.name].game.to_string_lossy())
                 .map(|installed| (installed, entry))
         }))
         .collect::<anyhow::Result<Vec<_>>>()
@@ -46,20 +46,17 @@ fn get_game_entries(game: &Game, settings: GameSettings) -> anyhow::Result<Vec<(
 
 #[inline]
 pub fn register_games_styles() -> anyhow::Result<()> {
-    let sus = games::list()?.iter()
-        .map(|(name, game)| game.get_game_editions_list()
-            .map(|editions| editions.into_iter()
-                .map(|edition| game.get_details_background_style(&edition.name)
-                .map(|style| (name, edition.name, style)))
-                .collect::<Result<Vec<_>, _>>()))
-        .collect::<Result<Result<Vec<_>, _>, _>>()??;
-
     let mut styles = String::new();
 
-    for entries in sus {
-        for (game, edition, style) in entries {
-            if let Some(style) = style {
-                styles = format!("{styles} .game-details--{game}--{edition} {{ {style} }}");
+    for (name, game) in games::list()? {
+        // let game = match game.lock() {
+        //     Ok(game) => game,
+        //     Err(err) => anyhow::bail!("Failed to lock mutex: {}", err.to_string())
+        // };
+
+        for edition in game.get_game_editions_list()? {
+            if let Some(style) = game.get_details_background_style(&edition.name)? {
+                styles = format!("{styles} .game-details--{name}--{} {{ {style} }}", edition.name);
             }
         }
     }
@@ -81,9 +78,14 @@ pub fn get_games_list() -> anyhow::Result<GamesList> {
     let mut available = Vec::with_capacity(games.len());
 
     for game in games.values() {
-        let settings = settings.get_game_settings(game)?;
+        // let game = match game.lock() {
+        //     Ok(game) => game,
+        //     Err(err) => anyhow::bail!("Failed to lock mutex: {}", err.to_string())
+        // };
 
-        let entries = get_game_entries(game, settings)?;
+        let settings = settings.get_game_settings(&game)?;
+
+        let entries = get_game_entries(&game, settings)?;
 
         let installed_entries = entries.iter()
             .filter_map(|(installed, entry)| installed.then_some(entry))

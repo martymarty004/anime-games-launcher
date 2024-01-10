@@ -548,14 +548,14 @@ impl SimpleComponent for MainApp {
                         games::get_unsafe(info.get_name())
                     };
 
-                    let settings = config::get().games.get_game_settings(game).unwrap();
+                    let settings = config::get().games.get_game_settings(&game).unwrap();
 
                     let paths = settings
                         .paths
                         .get(info.get_edition())
                         .unwrap();
 
-                    match game.get_game_status(paths.game.to_string_lossy(), info.get_edition()) {
+                    match game.get_game_status(&paths.game.to_string_lossy(), info.get_edition()) {
                         Ok(status) => {
                             self.game_details.emit(GameDetailsComponentInput::SetStatus(status));
                         }

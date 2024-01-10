@@ -98,7 +98,12 @@ impl Addon {
             anyhow::bail!("Unable to find {} integration script", game.as_ref());
         };
 
-        let settings = config::get().games.get_game_settings(game)?;
+        // let game = match game.lock() {
+        //     Ok(game) => game,
+        //     Err(err) => anyhow::bail!("Failed to get read RwLock: {}", err.to_string())
+        // };
+
+        let settings = config::get().games.get_game_settings(&game)?;
 
         let Some(paths) = settings.paths.get(edition.as_ref()) else {
             anyhow::bail!("Unable to find {} paths", game.manifest.game_title);

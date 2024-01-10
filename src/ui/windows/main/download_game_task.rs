@@ -86,13 +86,13 @@ pub fn get_download_game_task(game_info: &CardInfo, config: &config::Config) -> 
         games::get_unsafe(game_info.get_name())
     };
 
-    let game_path = get_game_path(game, game_info.get_edition(), config)?;
+    let game_path = get_game_path(&game, game_info.get_edition(), config)?;
 
     Ok(Box::new(DownloadDiffQueuedTask {
         card_info: game_info.clone(),
         download_path: game_path.clone(),
         diff_info: get_diff_or_download(
-            game,
+            &game,
             game_info.get_edition(),
             game_path.to_string_lossy()
         )?,

@@ -75,7 +75,7 @@ pub fn prepare_folders(game: &Game, info: &CardInfo, paths: &GameEditionPaths, e
             // Is the addon is enabled in the settings
             if is_addon_enabled(enabled_addons, addon, &group) {
                 // Get its version diff
-                let diff = game.get_addon_diff(&group.name, &addon.name, addon_path.to_string_lossy(), info.get_edition())?;
+                let diff = game.get_addon_diff(&group.name, &addon.name, &addon_path.to_string_lossy(), info.get_edition())?;
 
                 // If the addon is installed and its version is latest
                 if let Some(Diff { status: DiffStatus::Latest, .. }) = diff {
@@ -198,7 +198,7 @@ pub fn launch_game(info: &CardInfo) -> anyhow::Result<()> {
 
     // Get game settings
     let config = config::get();
-    let settings = config.games.get_game_settings(game)?;
+    let settings = config.games.get_game_settings(&game)?;
 
     // Get game paths
     let Some(paths) = settings.paths.get(info.get_edition()) else {
@@ -211,14 +211,14 @@ pub fn launch_game(info: &CardInfo) -> anyhow::Result<()> {
     };
 
     // Prepare game and addons folders
-    let Some((game_path, addons_path)) = prepare_folders(game, info, paths, enabled_addons)? else {
+    let Some((game_path, addons_path)) = prepare_folders(&game, info, paths, enabled_addons)? else {
         return Ok(())
     };
 
     // Request game launch options
     let options = game.get_launch_options(
-        game_path.to_string_lossy(),
-        addons_path.to_string_lossy(),
+        &game_path.to_string_lossy(),
+        &addons_path.to_string_lossy(),
         info.get_edition()
     )?;
 
