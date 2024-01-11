@@ -3,13 +3,16 @@ use std::path::{Path, PathBuf};
 use serde_json::Value as Json;
 use mlua::prelude::*;
 
+use once_cell::sync::Lazy;
+
 pub mod manifest;
+pub mod cache;
 pub mod standards;
 
 use manifest::Manifest;
+use cache::Cache;
 use standards::prelude::*;
 
-#[derive(Debug)]
 pub struct Game {
     pub manifest: Manifest,
     pub script_path: PathBuf,
@@ -47,6 +50,7 @@ impl Game {
         let game = Self {
             manifest,
             script_path,
+
             lua: Lua::new()
         };
 
@@ -69,40 +73,111 @@ impl Game {
     }
 
     pub fn get_card_picture(&self, edition: impl AsRef<str>) -> anyhow::Result<String> {
-        match self.manifest.script_standard {
-            IntegrationStandard::V1 => Ok(self.lua.globals()
-                .call_function("v1_visual_get_card_picture", edition.as_ref())?)
+        static mut CACHE: Lazy<Cache<String, String>> = Cache::lazy_new();
+
+        let key = self.manifest.game_name.clone() + edition.as_ref();
+
+        unsafe {
+            if let Some(picture) = CACHE.get(&key) {
+                println!("[-cache][{key}] get_card_picture");
+                return Ok(picture.clone());
+            }
         }
+
+        let picture = match self.manifest.script_standard {
+            IntegrationStandard::V1 => self.lua.globals()
+                .call_function::<_, String>("v1_visual_get_card_picture", edition.as_ref())?
+        };
+
+        unsafe {
+            println!("[+cache][{key}] get_card_picture");
+            CACHE.set(key, picture.clone());
+        }
+
+        Ok(picture)
     }
 
     pub fn get_background_picture(&self, edition: impl AsRef<str>) -> anyhow::Result<String> {
-        match self.manifest.script_standard {
-            IntegrationStandard::V1 => Ok(self.lua.globals()
-                .call_function("v1_visual_get_background_picture", edition.as_ref())?)
+        static mut CACHE: Lazy<Cache<String, String>> = Cache::lazy_new();
+
+        let key = self.manifest.game_name.clone() + edition.as_ref();
+
+        unsafe {
+            if let Some(picture) = CACHE.get(&key) {
+                println!("[-cache][{key}] get_background_picture");
+                return Ok(picture.clone());
+            }
         }
+
+        let picture = match self.manifest.script_standard {
+            IntegrationStandard::V1 => self.lua.globals()
+                .call_function::<_, String>("v1_visual_get_background_picture", edition.as_ref())?
+        };
+
+        unsafe {
+            println!("[+cache][{key}] get_background_picture");
+            CACHE.set(key, picture.clone());
+        }
+
+        Ok(picture)
     }
 
     pub fn get_details_background_style(&self, edition: impl AsRef<str>) -> anyhow::Result<Option<String>> {
-        match self.manifest.script_standard {
-            IntegrationStandard::V1 => Ok(self.lua.globals().contains_key("v1_visual_get_details_background_css")?
-                .then(|| self.lua.globals().call_function("v1_visual_get_details_background_css", edition.as_ref()))
-                .transpose()?)
+        static mut CACHE: Lazy<Cache<String, Option<String>>> = Cache::lazy_new();
+
+        let key = self.manifest.game_name.clone() + edition.as_ref();
+
+        unsafe {
+            if let Some(style) = CACHE.get(&key) {
+                println!("[-cache][{key}] get_details_background_style");
+                return Ok(style.clone());
+            }
         }
+
+        let style = match self.manifest.script_standard {
+            IntegrationStandard::V1 => {
+                self.lua.globals().contains_key("v1_visual_get_details_background_css")?
+                    .then(|| self.lua.globals()
+                    .call_function::<_, String>("v1_visual_get_details_background_css", edition.as_ref()))
+                    .transpose()?
+            }
+        };
+
+        unsafe {
+            println!("[+cache][{key}] get_details_background_style");
+            CACHE.set(key, style.clone());
+        }
+
+        Ok(style)
     }
 
     pub fn get_game_editions_list(&self) -> anyhow::Result<Vec<GameEdition>> {
-        match self.manifest.script_standard {
+        static mut CACHE: Lazy<Cache<String, Vec<GameEdition>>> = Cache::lazy_new();
+
+        unsafe {
+            if let Some(editions) = CACHE.get(&self.manifest.game_name) {
+                println!("[-cache][{}] get_game_editions_list", self.manifest.game_name);
+                return Ok(editions.clone());
+            }
+        }
+
+        let editions = match self.manifest.script_standard {
             IntegrationStandard::V1 => {
-                let editions = self.lua.globals()
+                self.lua.globals()
                     .call_function::<_, LuaTable>("v1_game_get_editions_list", ())?
                     .sequence_values::<LuaTable>()
                     .flatten()
                     .map(|edition| GameEdition::from_table(edition, self.manifest.script_standard))
-                    .collect::<Result<Vec<_>, _>>()?;
-
-                Ok(editions)
+                    .collect::<Result<Vec<_>, _>>()?
             }
+        };
+
+        unsafe {
+            println!("[+cache][{}] get_game_editions_list", self.manifest.game_name);
+            CACHE.set(self.manifest.game_name.clone(), editions.clone());
         }
+
+        Ok(editions)
     }
 
     pub fn is_game_installed(&self, path: impl AsRef<str>) -> anyhow::Result<bool> {
@@ -185,18 +260,34 @@ impl Game {
     }
 
     pub fn get_addons_list(&self, edition: impl AsRef<str>) -> anyhow::Result<Vec<AddonsGroup>> {
-        match self.manifest.script_standard {
+        static mut CACHE: Lazy<Cache<String, Vec<AddonsGroup>>> = Cache::lazy_new();
+
+        let key = self.manifest.game_name.clone() + edition.as_ref();
+
+        unsafe {
+            if let Some(addons) = CACHE.get(&key) {
+                println!("[-cache][{key}] get_addons_list");
+                return Ok(addons.clone());
+            }
+        }
+
+        let addons = match self.manifest.script_standard {
             IntegrationStandard::V1 => {
-                let dlcs = self.lua.globals()
+                self.lua.globals()
                     .call_function::<_, LuaTable>("v1_addons_get_list", edition.as_ref())?
                     .sequence_values::<LuaTable>()
                     .flatten()
                     .map(|group| AddonsGroup::from_table(group, self.manifest.script_standard))
-                    .collect::<Result<Vec<_>, _>>()?;
-
-                Ok(dlcs)
+                    .collect::<Result<Vec<_>, _>>()?
             }
+        };
+
+        unsafe {
+            println!("[+cache][{key}] get_addons_list");
+            CACHE.set(key, addons.clone());
         }
+
+        Ok(addons)
     }
 
     pub fn is_addon_installed(&self, group_name: impl AsRef<str>, addon_name: impl AsRef<str>, addon_path: impl AsRef<str>, edition: impl AsRef<str>) -> anyhow::Result<bool> {
